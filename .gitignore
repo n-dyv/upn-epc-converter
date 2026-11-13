@@ -1,0 +1,12 @@
+node_modules/
+dist/
+public/pdfjs/
+tests/fixtures/real/
+tests/fixtures/generated/
+
+# Local-only documents (not published)
+SPEC.md
+DEVELOPING.md
+
+# macOS folder metadata
+.DS_Store
