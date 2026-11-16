@@ -37,7 +37,7 @@ export type UpnParseErrorCode = "not-upn" | "too-few-fields";
 
 export type UpnParseResult =
   | { ok: true; fields: UpnFields; lines: string[]; warnings: Issue[] }
-  | { ok: false; error: UpnParseErrorCode; message: string };
+  | { ok: false; error: UpnParseErrorCode; fieldCount: number; message: string };
 
 /** True when the decoded QR text is a UPN QR payload: `UPNQR` followed by a line break. */
 export function looksLikeUpn(text: string): boolean {
@@ -56,12 +56,13 @@ export function computeControlSum(rawFields: readonly string[]): number {
 export function parseUpn(text: string): UpnParseResult {
   const raw = text.split(/\r?\n/);
   if ((raw[0] ?? "").trim() !== "UPNQR") {
-    return { ok: false, error: "not-upn", message: "This QR code is not a UPN QR payment code." };
+    return { ok: false, error: "not-upn", fieldCount: raw.length, message: "This QR code is not a UPN QR payment code." };
   }
   if (raw.length < 19) {
     return {
       ok: false,
       error: "too-few-fields",
+      fieldCount: raw.length,
       message: `This UPN QR code is incomplete (${raw.length} of 20 fields).`,
     };
   }

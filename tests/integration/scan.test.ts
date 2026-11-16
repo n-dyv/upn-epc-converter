@@ -2,6 +2,7 @@ import { readFileSync } from "node:fs";
 import { beforeAll, describe, expect, it } from "vitest";
 import { buildEpc } from "../../src/core/epc";
 import { reportNotices } from "../../src/scan/classify";
+import { sl } from "../../src/i18n";
 import { scanFile } from "../../src/scan/pipeline";
 import { readSymbols } from "../../src/scan/zxing";
 import type { FileReport, Progress } from "../../src/scan/types";
@@ -143,18 +144,21 @@ describe("other pipeline behaviour", () => {
 
   it("corrupt PDFs and unsupported files produce messages, not crashes", async () => {
     const corrupt = await scanFile(fileOf("bad.pdf", new TextEncoder().encode("%PDF-1.7\ngarbage")), nodeEnv);
-    expect(corrupt.error).toMatch(/not a valid PDF|could not be read/);
+    expect(corrupt.error?.code).toMatch(/^pdf-(invalid|unreadable)$/);
+    expect(reportNotices(corrupt)[0]).toMatch(/not a valid PDF|could not be read/);
     const txt = await scanFile(fileOf("notes.txt", new TextEncoder().encode("hello"), "text/plain"), nodeEnv);
-    expect(txt.error).toMatch(/not a supported file/);
+    expect(reportNotices(txt)).toEqual(["notes.txt is not a supported file. Use a PDF, PNG, JPEG or WebP file."]);
+    expect(reportNotices(txt, sl)).toEqual(["Datoteka notes.txt ni podprta. Uporabite datoteko PDF, PNG, JPEG ali WebP."]);
     const badImg = await scanFile(fileOf("broken.png", Uint8Array.of(0x89, 0x50, 0x4e, 0x47, 1, 2, 3)), nodeEnv);
-    expect(badImg.error).toMatch(/could not be opened as an image/);
+    expect(reportNotices(badImg)[0]).toMatch(/could not be opened as an image/);
   });
 
   it("password-protected PDFs produce a clear message", async () => {
     // AES-256, user password "secret"; created once with PyMuPDF (pdf-lib cannot encrypt).
     const pdf = readFileSync(new URL("../fixtures/static/password-protected.pdf", import.meta.url));
     const report = await scanFile(fileOf("locked.pdf", pdf), nodeEnv);
-    expect(report.error).toBe("This PDF is password-protected. Remove the password and try again.");
+    expect(report.error).toEqual({ code: "pdf-password" });
+    expect(reportNotices(report)).toEqual(["This PDF is password-protected. Remove the password and try again."]);
   });
 
   it("refuses PDFs over 50 pages", async () => {
@@ -162,6 +166,7 @@ describe("other pipeline behaviour", () => {
     const doc = await PDFDocument.create();
     for (let i = 0; i < 51; i++) doc.addPage([200, 200]);
     const report = await scanFile(fileOf("long.pdf", await doc.save()), nodeEnv);
-    expect(report.error).toBe("This PDF has 51 pages. The limit is 50 pages.");
+    expect(reportNotices(report)).toEqual(["This PDF has 51 pages. The limit is 50 pages."]);
+    expect(reportNotices(report, sl)).toEqual(["Ta PDF ima 51 strani. Omejitev je 50 strani."]);
   });
 });

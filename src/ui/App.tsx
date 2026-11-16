@@ -3,16 +3,17 @@ import type { Payment } from "../core/payment";
 import { browserEnv } from "../scan/browser";
 import { reportNotices } from "../scan/classify";
 import { scanFile, type InputFile } from "../scan/pipeline";
-import type { Progress } from "../scan/types";
+import type { FileReport, Progress } from "../scan/types";
+import { applyLang, CATALOGS, initialLang, LANGS, storeLang, type Lang } from "../i18n";
 import { ensureExpanded, nextUnpaidAfter } from "./accordion";
 import { AlertIcon, InfoIcon, LockIcon, LogoMark, MoonIcon, SunIcon, TrashIcon, UploadIcon } from "./icons";
 import { applyTheme, readStoredTheme, storeTheme, systemTheme, type Theme } from "./theme";
 import { PaymentCard, type CardState } from "./PaymentCard";
 
+/** A file that produced notices. The report is kept (not the text) so notices follow a language switch. */
 interface FileNotice {
   id: number;
-  fileName: string;
-  messages: string[];
+  report: FileReport;
 }
 
 const ACCEPT = ".pdf,application/pdf,image/png,image/jpeg,image/webp";
@@ -29,6 +30,19 @@ export function App() {
   const queue = useRef<Promise<void>>(Promise.resolve());
   const generation = useRef(0); // bumped by "Clear all" so in-flight results are dropped
   const fileInput = useRef<HTMLInputElement>(null);
+
+  // Interface language: a stored choice wins; otherwise the browser language (see src/i18n).
+  const [lang, setLang] = useState<Lang>(initialLang);
+  const m = CATALOGS[lang];
+  useEffect(() => applyLang(lang), [lang]);
+  const chooseLang = (next: Lang) => {
+    setLang(next);
+    storeLang(next);
+  };
+  // Pasted images are named when they arrive; read the current catalog through a ref so the
+  // paste listener does not need re-registering on every language switch.
+  const messagesRef = useRef(m);
+  messagesRef.current = m;
 
   const enqueue = useCallback(
     (files: InputFile[]) => {
@@ -49,8 +63,7 @@ export function App() {
             paid: false,
           }));
           if (newCards.length) setCards((prev) => [...prev, ...newCards]);
-          const messages = reportNotices(report);
-          if (messages.length) setNotices((n) => [...n, { id: nextId.current++, fileName: report.fileName, messages }]);
+          if (reportNotices(report).length) setNotices((n) => [...n, { id: nextId.current++, report }]);
         });
       }
       queue.current = queue.current.then(() => {
@@ -62,7 +75,7 @@ export function App() {
 
   const fromFileList = (list: FileList | File[], pasted = false): InputFile[] =>
     Array.from(list).map((f, i) => ({
-      name: pasted ? (list.length > 1 ? `Pasted image ${i + 1}` : "Pasted image") : f.name,
+      name: pasted ? messagesRef.current.pastedImage(list.length > 1 ? i + 1 : undefined) : f.name,
       type: f.type,
       data: f,
     }));
@@ -166,17 +179,31 @@ export function App() {
           <LogoMark />
           <div>
             <h1>UPN → EPC QR</h1>
-            <p>Turns the Slovenian UPN QR code on a bill into a SEPA (EPC) QR code that Revolut, N26 or Wise can scan from this screen.</p>
+            <p>{m.tagline}</p>
           </div>
         </div>
         <div className="head-actions">
-          <p className="privacy"><LockIcon size={15} /> Everything is processed in your browser. Your bills are never uploaded or stored.</p>
+          <p className="privacy"><LockIcon size={15} /> {m.privacy}</p>
+          <div className="lang-switch" role="group" aria-label={m.language} data-testid="lang-switch">
+            {LANGS.map((l) => (
+              <button
+                key={l}
+                type="button"
+                lang={CATALOGS[l].htmlLang}
+                aria-pressed={lang === l}
+                title={l === "sl" ? "Slovenščina" : "English"}
+                onClick={() => chooseLang(l)}
+              >
+                {l.toUpperCase()}
+              </button>
+            ))}
+          </div>
           <button
             type="button"
             className="theme-toggle"
             onClick={toggleTheme}
-            aria-label={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
-            title={theme === "dark" ? "Switch to light mode" : "Switch to dark mode"}
+            aria-label={theme === "dark" ? m.toLight : m.toDark}
+            title={theme === "dark" ? m.toLight : m.toDark}
             data-testid="theme-toggle"
           >
             {theme === "dark" ? <SunIcon size={18} /> : <MoonIcon size={18} />}
@@ -188,13 +215,13 @@ export function App() {
         <span className="drop-icon" aria-hidden="true"><UploadIcon size={cards.length ? 22 : 28} /></span>
         <div className="drop-text">
           <p className="drop-title">
-            <span className="when-pointer">Drop bills here</span>
-            <span className="when-touch">Add a bill</span>
+            <span className="when-pointer">{m.dropHere}</span>
+            <span className="when-touch">{m.addBill}</span>
           </p>
-          <p className="drop-sub">PDF, PNG, JPEG or WebP — several at once is fine</p>
+          <p className="drop-sub">{m.dropFormats}</p>
         </div>
         <button type="button" className="primary" onClick={() => fileInput.current?.click()}>
-          Choose files
+          {m.chooseFiles}
         </button>
         <input
           ref={fileInput}
@@ -208,34 +235,32 @@ export function App() {
             e.target.value = "";
           }}
         />
-        <p className="hint">or paste a screenshot (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>V</kbd>)</p>
+        <p className="hint">{m.pasteHint} (<kbd>Ctrl</kbd>/<kbd>Cmd</kbd>+<kbd>V</kbd>)</p>
         {busy && (
           <p className="progress" role="status" data-testid="progress">
             <span className="spinner" aria-hidden="true" />
-            Reading {progress.fileName}
-            {progress.page ? ` — page ${progress.page} of ${progress.pageCount}` : "…"}
-            {queued > 1 ? ` (${queued - 1} more waiting)` : ""}
+            {m.progress(progress.fileName, progress.page, progress.pageCount, queued - 1)}
           </p>
         )}
       </section>
 
       {dragging && (
         <div className="drag-overlay">
-          <div><UploadIcon size={40} /><p>Drop to read the payment codes</p></div>
+          <div><UploadIcon size={40} /><p>{m.dropOverlay}</p></div>
         </div>
       )}
 
       {cards.length === 0 && !busy && (
         <ol className="steps">
           <li>
-            <b>Add a bill</b>
+            <b>{m.stepAdd}</b>
             <span>
-              <span className="when-pointer">Drop a PDF or image, or paste a screenshot of the payment slip.</span>
-              <span className="when-touch">Choose a PDF, a photo or a screenshot of the payment slip.</span>
+              <span className="when-pointer">{m.stepAddPointer}</span>
+              <span className="when-touch">{m.stepAddTouch}</span>
             </span>
           </li>
-          <li><b>Check the details</b><span>Review recipient, IBAN, amount and reference; fix anything that is off.</span></li>
-          <li><b>Scan from the screen</b><span>Open your banking app's QR scanner and point it at the code.</span></li>
+          <li><b>{m.stepCheck}</b><span>{m.stepCheckText}</span></li>
+          <li><b>{m.stepScan}</b><span>{m.stepScanText}</span></li>
         </ol>
       )}
 
@@ -245,8 +270,8 @@ export function App() {
             <div key={n.id} className="notice">
               <InfoIcon size={18} />
               <div>
-                {n.messages.map((m, i) => (
-                  <p key={i}>{m}</p>
+                {reportNotices(n.report, m).map((text, i) => (
+                  <p key={i}>{text}</p>
                 ))}
               </div>
             </div>
@@ -256,7 +281,7 @@ export function App() {
 
       {cards.length > 0 && (
         <h2 className="cards-title">
-          Payments <span>{cards.filter((c) => !c.paid).length} to pay · {cards.length} found</span>
+          {m.payments} <span>{m.paymentsCount(cards.filter((c) => !c.paid).length, cards.length)}</span>
         </h2>
       )}
 
@@ -269,14 +294,15 @@ export function App() {
             onToggle={() => setExpanded((cur) => (cur === card.id ? null : card.id))}
             onChange={(p) => updatePayment(card.id, p)}
             onPaid={(paid) => setPaid(card.id, paid)}
+            m={m}
           />
         ))}
       </section>
 
       <footer className="app-foot">
-        <p><AlertIcon size={16} /> Always check the recipient, amount and reference in your banking app before confirming the payment.</p>
+        <p><AlertIcon size={16} /> {m.footerWarning}</p>
         <button type="button" className="ghost" onClick={clearAll} disabled={cards.length === 0 && notices.length === 0}>
-          <TrashIcon size={16} /> Clear all
+          <TrashIcon size={16} /> {m.clearAll}
         </button>
       </footer>
     </div>

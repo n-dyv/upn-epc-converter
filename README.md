@@ -5,6 +5,7 @@ such as Revolut, N26 or Wise can scan.
 
 - Bills are processed entirely in your browser. Nothing is uploaded; no bill data is stored.
 - Several bills and several codes per PDF are supported; each payment can be checked and edited before scanning.
+- Available in English and Slovenian.
 - Always check the recipient, amount and reference in your banking app before confirming a payment.
 
 © All rights reserved. No licence is granted to copy, modify or redistribute this code.

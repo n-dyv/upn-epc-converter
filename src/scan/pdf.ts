@@ -4,7 +4,8 @@
 import type * as Pdfjs from "pdfjs-dist";
 import type { DocumentInitParameters } from "pdfjs-dist/types/src/display/api";
 import type { PageSymbols } from "./classify";
-import type { PixelImage, Progress, ReadSymbols } from "./types";
+import { en } from "../i18n/en";
+import type { FileError, PixelImage, Progress, ReadSymbols } from "./types";
 
 export const MAX_PDF_PAGES = 50;
 const DPI_FIRST = 300;
@@ -27,13 +28,17 @@ export interface PdfEnv {
   documentParams?: Partial<DocumentInitParameters>;
 }
 
-export class PdfError extends Error {}
+export class PdfError extends Error {
+  constructor(readonly info: FileError) {
+    super(en.fileError(info));
+  }
+}
 
-function describePdfError(e: unknown): string {
+function describePdfError(e: unknown): FileError {
   const name = (e as { name?: string })?.name;
-  if (name === "PasswordException") return "This PDF is password-protected. Remove the password and try again.";
-  if (name === "InvalidPDFException") return "This file is not a valid PDF or is damaged.";
-  return `The PDF could not be read (${(e as Error)?.message ?? String(e)}).`;
+  if (name === "PasswordException") return { code: "pdf-password" };
+  if (name === "InvalidPDFException") return { code: "pdf-invalid" };
+  return { code: "pdf-unreadable", detail: (e as Error)?.message ?? String(e) };
 }
 
 async function renderPage(page: Pdfjs.PDFPageProxy, dpi: number, env: PdfEnv): Promise<PixelImage> {
@@ -69,7 +74,7 @@ export async function scanPdf(
       throw new PdfError(describePdfError(e));
     }
     if (doc.numPages > MAX_PDF_PAGES) {
-      throw new PdfError(`This PDF has ${doc.numPages} pages. The limit is ${MAX_PDF_PAGES} pages.`);
+      throw new PdfError({ code: "pdf-too-many-pages", pages: doc.numPages, limit: MAX_PDF_PAGES });
     }
     const out: PageSymbols[] = [];
     for (let n = 1; n <= doc.numPages; n++) {

@@ -1,7 +1,7 @@
 import type { QrCharset } from "../core/charset";
 import type { Conversion } from "../core/convert";
 import type { Issue } from "../core/issues";
-import type { UpnFields } from "../core/upn";
+import type { UpnFields, UpnParseErrorCode } from "../core/upn";
 
 /** RGBA pixels, compatible with the DOM ImageData and with @napi-rs/canvas ImageData. */
 export interface PixelImage {
@@ -49,8 +49,18 @@ export interface FoundUpn {
 /** A symbol that starts with UPNQR but could not be parsed. */
 export interface BrokenUpn {
   source: Source;
-  message: string;
+  error: UpnParseErrorCode;
+  /** Number of lines found, for the "incomplete" message. */
+  fieldCount: number;
 }
+
+/** Fatal problem with a file; turned into text by the message catalog (src/i18n). */
+export type FileError =
+  | { code: "unsupported" | "image-unreadable"; fileName: string }
+  | { code: "failed"; fileName: string; detail: string }
+  | { code: "pdf-password" | "pdf-invalid" }
+  | { code: "pdf-unreadable"; detail: string }
+  | { code: "pdf-too-many-pages"; pages: number; limit: number };
 
 export interface FileReport {
   fileName: string;
@@ -61,7 +71,7 @@ export interface FileReport {
   /** Whether any QR symbol at all was found. */
   anySymbol: boolean;
   /** Fatal problem with the file itself (unsupported type, corrupt, password, too many pages). */
-  error?: string;
+  error?: FileError;
 }
 
 export interface Progress {

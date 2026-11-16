@@ -3,6 +3,7 @@
 import { decodeQrBytesDetailed } from "../core/charset";
 import { upnToPayment } from "../core/convert";
 import { looksLikeUpn, parseUpn } from "../core/upn";
+import { en, type Messages } from "../i18n/en";
 import type { FileReport, QrSymbol, Source } from "./types";
 
 export interface PageSymbols {
@@ -28,7 +29,7 @@ export function classify(fileName: string, pages: PageSymbols[]): FileReport {
       seen.add(text);
       const parsed = parseUpn(text);
       if (!parsed.ok) {
-        report.broken.push({ source, message: parsed.message });
+        report.broken.push({ source, error: parsed.error, fieldCount: parsed.fieldCount });
         continue;
       }
       report.found.push({
@@ -46,31 +47,18 @@ export function classify(fileName: string, pages: PageSymbols[]): FileReport {
   return report;
 }
 
-const plural = (n: number, one: string, many: string) => (n === 1 ? one : many);
-
-/** File-level notices for the UI, in a fixed order. */
-export function reportNotices(r: FileReport): string[] {
+/** File-level notices for the UI, in a fixed order, in the language of `m` (English by default). */
+export function reportNotices(r: FileReport, m: Messages = en): string[] {
+  if (r.error) return [m.fileError(r.error)];
+  if (!r.anySymbol) return [m.noQrFound(r.fileName)];
   const out: string[] = [];
-  if (r.error) return [r.error];
-  if (!r.anySymbol) {
-    out.push(
-      `No QR code was found in ${r.fileName}. Try a sharper screenshot or a higher-resolution scan.`,
-    );
-    return out;
-  }
-  if (r.found.length === 0 && r.broken.length === 0) {
-    out.push(`No UPN payment code was found in ${r.fileName}.`);
-  }
-  for (const b of r.broken) out.push(`${sourceLabel(b.source)}: ${b.message}`);
-  if (r.otherCount > 0) {
-    out.push(`${r.otherCount} other QR ${plural(r.otherCount, "code was", "codes were")} ignored.`);
-  }
-  if (r.duplicateCount > 0) {
-    out.push(`${r.duplicateCount} ${plural(r.duplicateCount, "duplicate", "duplicates")} skipped.`);
-  }
+  if (r.found.length === 0 && r.broken.length === 0) out.push(m.noUpnFound(r.fileName));
+  for (const b of r.broken) out.push(`${m.sourceLabel(b.source)}: ${m.brokenUpn(b.error, b.fieldCount)}`);
+  if (r.otherCount > 0) out.push(m.otherIgnored(r.otherCount));
+  if (r.duplicateCount > 0) out.push(m.duplicatesSkipped(r.duplicateCount));
   return out;
 }
 
-export function sourceLabel(s: Source): string {
-  return s.page ? `${s.fileName}, page ${s.page}` : s.fileName;
+export function sourceLabel(s: Source, m: Messages = en): string {
+  return m.sourceLabel(s);
 }

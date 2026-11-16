@@ -2,7 +2,7 @@
 
 import { classify } from "./classify";
 import { PdfError, scanPdf, type PdfEnv } from "./pdf";
-import type { FileReport, PixelImage, Progress, ReadSymbols } from "./types";
+import type { FileError, FileReport, PixelImage, Progress, ReadSymbols } from "./types";
 
 export interface ScanEnv {
   readSymbols: ReadSymbols;
@@ -34,7 +34,7 @@ export async function detectKind(file: InputFile): Promise<FileKind> {
   return "unsupported";
 }
 
-function failed(fileName: string, error: string): FileReport {
+function failed(fileName: string, error: FileError): FileReport {
   return { fileName, found: [], broken: [], otherCount: 0, duplicateCount: 0, anySymbol: false, error };
 }
 
@@ -56,14 +56,14 @@ export async function scanFile(
       try {
         image = await env.loadImage(file.data);
       } catch {
-        return failed(file.name, `${file.name} could not be opened as an image.`);
+        return failed(file.name, { code: "image-unreadable", fileName: file.name });
       }
       const symbols = await env.readSymbols(image);
       return classify(file.name, [{ source: { fileName: file.name }, symbols }]);
     }
-    return failed(file.name, `${file.name} is not a supported file. Use a PDF, PNG, JPEG or WebP file.`);
+    return failed(file.name, { code: "unsupported", fileName: file.name });
   } catch (e) {
-    if (e instanceof PdfError) return failed(file.name, e.message);
-    return failed(file.name, `${file.name} could not be processed (${(e as Error)?.message ?? String(e)}).`);
+    if (e instanceof PdfError) return failed(file.name, e.info);
+    return failed(file.name, { code: "failed", fileName: file.name, detail: (e as Error)?.message ?? String(e) });
   }
 }

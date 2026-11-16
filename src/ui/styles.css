@@ -124,6 +124,14 @@ button.ghost:hover:not(:disabled) { color: var(--error); border-color: transpare
 .head-actions { flex: none; display: flex; align-items: center; gap: 10px; }
 button.theme-toggle { width: 38px; height: 38px; padding: 0; border-radius: 10px; color: var(--muted); }
 button.theme-toggle:hover:not(:disabled) { color: var(--accent); }
+.lang-switch { flex: none; display: inline-flex; height: 38px; padding: 3px; border-radius: 10px; background: var(--surface-2); border: 1px solid var(--border); }
+.lang-switch button {
+  height: 100%; padding: 0 10px; border: 0; border-radius: 7px; background: transparent;
+  color: var(--muted); font-size: 12.5px; font-weight: 650; letter-spacing: 0.03em;
+}
+.lang-switch button:hover { color: var(--text); }
+.lang-switch button[aria-pressed="true"] { background: var(--surface); color: var(--text); box-shadow: var(--shadow-sm); }
+.lang-switch button:focus-visible { outline: none; box-shadow: 0 0 0 3px var(--ring); }
 .privacy {
   flex: none; display: inline-flex; align-items: center; gap: 7px;
   padding: 7px 13px; border-radius: 999px;
